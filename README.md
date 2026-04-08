@@ -23,8 +23,3 @@ Experimental measurements:
   2) Real-time prediction capability
   3) Reduced computational cost
 
-Neural networks provide:
-
-  1) Nonlinear mapping capability
-  2) Ability to learn complex fluid dynamics behavior
-  3) Fast inference once trained
