@@ -3,7 +3,7 @@
 > A machine learning surrogate for predicting added mass forces in fluid–structure interaction problems. Two fully independent implementations are provided — one in **JAX** and one in **PyTorch** — so you can benchmark frameworks or build on whichever stack you already use.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![JAX](https://img.shields.io/badge/JAX-latest-orange)](https://github.com/google/jax)
 [![PyTorch](https://img.shields.io/badge/PyTorch-latest-red)](https://pytorch.org/)
 
@@ -56,10 +56,19 @@ Both implementations share the same:
 
 ```
 Added-mass-force/
-├── torch_code.py          # PyTorch implementation
-├── jax_code.py            # JAX + Optax implementation
-├── pytorch_report.pdf     # Training results & analysis (PyTorch)
-├── jax_report.pdf         # Training results & analysis (JAX)
+├── src/
+│   ├── __init__.py
+│   ├── torch_code.py      # PyTorch implementation
+│   └── jax_code.py        # JAX + Optax implementation
+├── test/
+│   ├── torch_test.py      # pytest suite for PyTorch model & pipeline
+│   └── jax_test.py        # pytest suite for JAX model & pipeline
+├── reports/
+│   ├── pytorch_report.pdf # Training results & analysis (PyTorch)
+│   └── jax_report.pdf     # Training results & analysis (JAX)
+├── requirements.txt       # All Python dependencies
+├── script.sh              # Interactive helper: installs deps & runs chosen backend
+├── pytest.ini             # pytest configuration (testpaths = test)
 └── LICENSE
 ```
 
@@ -88,10 +97,16 @@ Input (3)  →  Linear(128) → ReLU
 
 ### Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - A CSV dataset (`complex_regression_data.csv`) with 3 feature columns and 1 target column
 
-### PyTorch
+### All dependencies at once
+
+```bash
+pip install -r requirements.txt
+```
+
+### PyTorch only
 
 ```bash
 pip install torch pandas numpy
@@ -99,7 +114,7 @@ pip install torch pandas numpy
 
 GPU acceleration is used automatically when a CUDA-capable device is available.
 
-### JAX
+### JAX only
 
 ```bash
 pip install jax jaxlib optax pandas numpy
@@ -111,10 +126,20 @@ For GPU/TPU support follow the [JAX installation guide](https://github.com/googl
 
 ## Usage
 
-### PyTorch
+### Interactive helper (recommended)
+
+The `script.sh` script checks your Python installation, installs any missing dependencies, and lets you choose which backend to run — all in one step.
 
 ```bash
-python torch_code.py
+chmod +x script.sh
+./script.sh
+# You will be prompted:  "Enter choice [jax/torch]:"
+```
+
+### PyTorch (manual)
+
+```bash
+python src/torch_code.py
 ```
 
 The script will:
@@ -130,10 +155,10 @@ Epoch 100: Test Loss = 8.4321e-03  Val Loss = 8.1234e-03
 Early stopping triggered
 ```
 
-### JAX
+### JAX (manual)
 
 ```bash
-python jax_code.py
+python src/jax_code.py
 ```
 
 The script will:
@@ -148,6 +173,23 @@ Epoch 100:  Train Loss = 9.1234e-03, Val Loss = 9.0012e-03
 ...
 Early stopping triggered
 ```
+
+---
+
+## Testing
+
+Both implementations ship with isolated pytest suites that do **not** require the CSV dataset.
+
+```bash
+pytest
+```
+
+`pytest.ini` sets `testpaths = test`, so all tests under `test/` are discovered automatically.
+
+| File | Covers |
+|---|---|
+| `test/torch_test.py` | MLP architecture, training step, data pipeline, MSE loss |
+| `test/jax_test.py` | `data_loader`, `init_mlp`, `mlp` forward pass, `loss_fn`, `update` step |
 
 ---
 
@@ -172,8 +214,8 @@ Early stopping triggered
 
 Full training curves, loss plots, and analysis are available in the companion PDF reports:
 
-- [`pytorch_report.pdf`](pytorch_report.pdf) — PyTorch training results
-- [`jax_report.pdf`](jax_report.pdf) — JAX training results
+- [`reports/pytorch_report.pdf`](reports/pytorch_report.pdf) — PyTorch training results
+- [`reports/jax_report.pdf`](reports/jax_report.pdf) — JAX training results
 
 Both frameworks converge to comparable validation loss, confirming framework-agnostic reproducibility of the surrogate model.
 
