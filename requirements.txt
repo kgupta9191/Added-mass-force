@@ -1,3 +1,6 @@
-openai
-langgraph
-typing_extensions
+jax
+jaxlib 
+optax 
+pandas 
+numpy
+torch
