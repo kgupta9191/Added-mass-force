@@ -3,13 +3,34 @@
 set -e
 
 REQUIRED_PYTHON="3.10"
-TARGET_FILE="jax.py"  # chnage it to torch.py for running PyTorch based code.
 
-MODULES=(
-  "openai"
-  "langgraph"
-  "typing_extensions"
-)
+# Prompt user to choose between JAX and PyTorch
+echo "Select the backend to run:"
+echo "  1) jax"
+echo "  2) torch"
+read -rp "Enter choice [jax/torch]: " BACKEND
+
+case "${BACKEND,,}" in
+  jax|1)
+    TARGET_FILE="jax_code.py"
+    ;;
+  torch|pytorch|2)
+    TARGET_FILE="torch_code.py"
+    ;;
+  *)
+    echo "Invalid choice: '$BACKEND'. Please enter 'jax' or 'torch'."
+    exit 1
+    ;;
+esac
+
+# Load modules from requirements.txt
+REQUIREMENTS_FILE="requirements.txt"
+if [ ! -f "$REQUIREMENTS_FILE" ]; then
+    echo "requirements.txt not found."
+    exit 1
+fi
+
+mapfile -t MODULES < <(grep -v '^\s*#' "$REQUIREMENTS_FILE" | grep -v '^\s*$' | sed 's/[>=<!].*//' | tr -d ' ')
 
 PYTHON_CMD="python$REQUIRED_PYTHON"
 
