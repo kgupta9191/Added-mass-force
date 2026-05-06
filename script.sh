@@ -12,10 +12,10 @@ read -rp "Enter choice [jax/torch]: " BACKEND
 
 case "${BACKEND,,}" in
   jax|1)
-    TARGET_FILE="jax_code.py"
+    TARGET_FILE="src/jax_code.py"
     ;;
   torch|pytorch|2)
-    TARGET_FILE="torch_code.py"
+    TARGET_FILE="src/torch_code.py"
     ;;
   *)
     echo "Invalid choice: '$BACKEND'. Please enter 'jax' or 'torch'."
