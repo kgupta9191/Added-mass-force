@@ -1,254 +1,394 @@
-# Added Mass Force Prediction
+# DeepSeek TUI
 
-> A machine learning surrogate for predicting added mass forces in fluid–structure interaction problems. Two fully independent implementations are provided — one in **JAX** and one in **PyTorch** — so you can benchmark frameworks or build on whichever stack you already use.
+> Terminal coding agent for DeepSeek V4. It runs from the `deepseek` command, streams reasoning blocks, edits local workspaces with approval gates, and includes an auto mode that chooses both model and thinking level per turn.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![JAX](https://img.shields.io/badge/JAX-latest-orange)](https://github.com/google/jax)
-[![PyTorch](https://img.shields.io/badge/PyTorch-latest-red)](https://pytorch.org/)
+<a>简体中文 README</a>
 
----
+## Install
 
-## Abstract
+`deepseek` is distributed as Rust binaries: the dispatcher command
+(`deepseek`) and the companion TUI runtime (`deepseek-tui`). Pick whichever
+install path you already use; they all put the same commands on your `PATH`.
+The npm package is an installer/wrapper for the release binaries, not the
+agent runtime itself.
 
-The prediction of added mass force during fluid–structure interaction (FSI) problems — such as water entry and slamming — is computationally expensive using traditional numerical methods. This project presents a data-driven machine learning approach that uses a deep neural network (multi-layer perceptron) to model and predict added mass forces from input flow and geometric parameters. The model is trained on simulated or experimental data to learn the nonlinear mapping between input features and resulting hydrodynamic forces. High accuracy is achieved at a fraction of the cost of a full CFD solve, demonstrating the potential of surrogate modelling for fast, real-time prediction in complex fluid dynamics problems.
+```bash
+# 1. npm — easiest if you already use Node. The package downloads the
+#    matching prebuilt Rust binaries from GitHub Releases.
+npm install -g deepseek-tui
 
----
+# 2. Cargo — no Node needed.
+cargo install deepseek-tui-cli --locked   # `deepseek` (entry point)
+cargo install deepseek-tui     --locked   # `deepseek-tui` (TUI binary)
 
-## Motivation
+# 3. Homebrew — macOS package manager.
+brew tap Hmbown/deepseek-tui
+brew install deepseek-tui
 
-In FSI problems such as water entry, slamming, and wave impact, **added mass** plays a crucial role. It represents the extra inertia a body experiences due to the accelerating surrounding fluid — and computing it accurately is essential for structural design and dynamic response analysis.
+# 4. Direct download — no package manager or toolchain.
+#    https://github.com/Hmbown/DeepSeek-TUI/releases
+#    Prebuilt for Linux x64/ARM64, macOS x64/ARM64, Windows x64.
+```
 
-**Traditional approaches are bottlenecked:**
+> In mainland China, speed up the npm path with
+> `--registry=https://registry.npmmirror.com`, or use the
+> <a>Cargo mirror</a> below.
 
-| Method | Problem |
-|---|---|
-| CFD (Navier–Stokes solvers) | Computationally expensive; hours to days per run |
-| Parametric CFD studies | Infeasible at scale |
-| Experimental measurement | Difficult for transient, high-speed events; requires sophisticated rigs |
+<a href="https://github.com/Hmbown/DeepSeek-TUI/actions/workflows/ci.yml"><img src="https://github.com/Hmbown/DeepSeek-TUI/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://www.npmjs.com/package/deepseek-tui"><img src="https://img.shields.io/npm/v/deepseek-tui"></a>
+<a href="https://crates.io/crates/deepseek-tui-cli"><img src="https://img.shields.io/crates/v/deepseek-tui-cli?label=crates.io"></a>
+<a href="https://deepwiki.com/Hmbown/DeepSeek-TUI">DeepWiki project index</a>
 
-**This project addresses those bottlenecks by providing:**
-
-1. A fast surrogate model trained once on existing data
-2. Real-time prediction capability (milliseconds per query)
-3. A dramatically reduced computational cost for parametric sweeps
+<img>
 
 ---
 
 ## What Is It?
 
-This repository contains two complete, independent implementations of the same MLP surrogate:
+DeepSeek TUI is a coding agent that runs in your terminal. It can read and edit files, run shell commands, search the web, manage git, and coordinate sub-agents from a keyboard-driven TUI.
 
-| File | Framework | Optimizer | Notes |
-|---|---|---|---|
-| `torch_code.py` | PyTorch | Adam | `torch.compile` + CUDA support, DataLoader with multi-worker prefetch |
-| `jax_code.py` | JAX + Optax | Adam | JIT-compiled update step, functional-style mini-batch loop |
+It is built around DeepSeek V4 (`deepseek-v4-pro` / `deepseek-v4-flash`), including 1M-token context windows, streaming reasoning blocks, and prefix-cache-aware cost reporting.
 
-Both implementations share the same:
-- **Network architecture** — `[3 → 128 → 128 → 64 → 1]` MLP with ReLU activations
-- **Data split** — 80 % train / 10 % validation / 10 % test
-- **Training schedule** — up to 5 000 epochs, early stopping with patience 500, logging every 100 epochs
-- **Learning rate** — `1e-5` with Adam
+### Key Features
 
----
-
-## Repository Structure
-
-```
-Added-mass-force/
-├── src/
-│   ├── __init__.py
-│   ├── torch_code.py      # PyTorch implementation
-│   └── jax_code.py        # JAX + Optax implementation
-├── test/
-│   ├── torch_test.py      # pytest suite for PyTorch model & pipeline
-│   └── jax_test.py        # pytest suite for JAX model & pipeline
-├── reports/
-│   ├── pytorch_report.pdf # Training results & analysis (PyTorch)
-│   └── jax_report.pdf     # Training results & analysis (JAX)
-├── requirements.txt       # All Python dependencies
-├── script.sh              # Interactive helper: installs deps & runs chosen backend
-├── pytest.ini             # pytest configuration (testpaths = test)
-└── LICENSE
-```
-
-> **Data file** — both scripts expect `complex_regression_data.csv` in the working directory (3 input feature columns + 1 target column). This file is not included in the repository; supply your own FSI/added-mass dataset.
+- **Auto mode** — `--model auto` / `/model auto` chooses both the model and thinking level for each turn
+- **Thinking-mode streaming** — see DeepSeek reasoning blocks as the model works
+- **Full tool suite** — file ops, shell execution, git, web search/browse, apply-patch, sub-agents, MCP servers
+- **1M-token context** — context tracking, manual or configured compaction, and prefix-cache telemetry
+- **Three modes** — Plan (read-only explore), Agent (interactive with approval), YOLO (auto-approved)
+- **Reasoning-effort tiers** — cycle through `off → high → max` with `Shift + Tab`
+- **Session save/resume** — checkpoint and resume long-running sessions
+- **Workspace rollback** — side-git pre/post-turn snapshots with `/restore` and `revert_turn`, without touching your repo's `.git`
+- **Durable task queue** — background tasks can survive restarts
+- **HTTP/SSE runtime API** — `deepseek serve --http` for headless agent workflows
+- **MCP protocol** — connect to Model Context Protocol servers for extended tooling; please see <a>docs/MCP.md</a>
+- **Native RLM** (`rlm_query`) — run batched analysis through cheap `deepseek-v4-flash` children using the same API client
+- **LSP diagnostics** — inline error/warning surfacing after every edit via rust-analyzer, pyright, typescript-language-server, gopls, clangd
+- **User memory** — optional persistent note file injected into the system prompt for cross-session preferences
+- **Localized UI** — `en`, `ja`, `zh-Hans`, `pt-BR` with auto-detection
+- **Live cost tracking** — per-turn and session-level token usage and cost estimates; cache hit/miss breakdown
+- **Skills system** — composable, installable instruction packs from GitHub with no backend service required
 
 ---
 
-## Model Architecture
+## How It's Wired
 
-Both implementations use the same feed-forward MLP:
+`deepseek` (dispatcher CLI) → `deepseek-tui` (companion binary) → ratatui interface ↔ async engine ↔ OpenAI-compatible streaming client. Tool calls route through a typed registry (shell, file ops, git, web, sub-agents, MCP, RLM) and results stream back into the transcript. The engine manages session state, turn tracking, the durable task queue, and an LSP subsystem that feeds post-edit diagnostics into the model's context before the next reasoning step.
 
-```
-Input (3)  →  Linear(128) → ReLU
-           →  Linear(128) → ReLU
-           →  Linear(64)  → ReLU
-           →  Linear(1)         ← scalar added-mass force prediction
-```
-
-- **He (Kaiming) weight initialisation** for stable ReLU training
-- **MSE loss** on the scalar output
-- **Early stopping** on validation loss (patience = 500 epochs)
+See <a>docs/ARCHITECTURE.md</a> for the full walkthrough.
 
 ---
 
-## Installation
-
-### Prerequisites
-
-- Python 3.10+
-- A CSV dataset (`complex_regression_data.csv`) with 3 feature columns and 1 target column
-
-### All dependencies at once
+## Quickstart
 
 ```bash
-pip install -r requirements.txt
+npm install -g deepseek-tui
+deepseek --version
+deepseek --model auto
 ```
 
-### PyTorch only
+Prebuilt binaries are published for **Linux x64**, **Linux ARM64** (v0.8.8+), **macOS x64**, **macOS ARM64**, and **Windows x64**. For other targets (musl, riscv64, FreeBSD, etc.), see <a>Install from source</a> or <a>docs/INSTALL.md</a>.
+
+On first launch you'll be prompted for your <a href="https://platform.deepseek.com/api_keys">DeepSeek API key</a>. The key is saved to `~/.deepseek/config.toml` so it works from any directory without OS credential prompts.
+
+You can also set it ahead of time:
 
 ```bash
-pip install torch pandas numpy
+deepseek auth set --provider deepseek   # saves to ~/.deepseek/config.toml
+
+export DEEPSEEK_API_KEY="YOUR_KEY"      # env var alternative; use ~/.zshenv for non-interactive shells
+deepseek
+
+deepseek doctor                         # verify setup
 ```
 
-GPU acceleration is used automatically when a CUDA-capable device is available.
+> To rotate or remove a saved key: `deepseek auth clear --provider deepseek`.
 
-### JAX only
+### Auto Mode
+
+Use `deepseek --model auto` or `/model auto` when you want DeepSeek TUI to decide how much model and reasoning power a turn needs.
+
+Auto mode controls two settings together:
+
+- Model: `deepseek-v4-flash` or `deepseek-v4-pro`
+- Thinking: `off`, `high`, or `max`
+
+Before the real turn is sent, the app makes a small `deepseek-v4-flash` routing call with thinking off. That router looks at the latest request and recent context, then selects a concrete model and thinking level for the real request. Short/simple turns can stay on Flash with thinking off; coding, debugging, release work, architecture, security review, or ambiguous multi-step tasks can move up to Pro and/or higher thinking.
+
+`auto` is local to DeepSeek TUI. The upstream API never receives `model: "auto"`; it receives the concrete model and thinking setting chosen for that turn. The TUI shows the selected route, and cost tracking is charged against the model that actually ran. If the router call fails or returns an invalid answer, the app falls back to a local heuristic. Sub-agents inherit auto mode unless you assign them an explicit model.
+
+Use a fixed model or fixed thinking level when you want repeatable benchmarking, a strict cost ceiling, or a specific provider/model mapping.
+
+### Linux ARM64 (Raspberry Pi, Asahi, Graviton, HarmonyOS PC)
+
+`npm i -g deepseek-tui` works on glibc-based ARM64 Linux from v0.8.8 onward. You can also download prebuilt binaries from the <a href="https://github.com/Hmbown/DeepSeek-TUI/releases">Releases page</a> and place them side by side on your `PATH`.
+
+### China / Mirror-friendly Installation
+
+If GitHub or npm downloads are slow from mainland China, use a Cargo registry mirror:
+
+```toml
+# ~/.cargo/config.toml
+[source.crates-io]
+replace-with = "tuna"
+
+[source.tuna]
+registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+```
+
+Then install both binaries (the dispatcher delegates to the TUI at runtime):
 
 ```bash
-pip install jax jaxlib optax pandas numpy
+cargo install deepseek-tui-cli --locked   # provides `deepseek`
+cargo install deepseek-tui     --locked   # provides `deepseek-tui`
+deepseek --version
 ```
 
-For GPU/TPU support follow the [JAX installation guide](https://github.com/google/jax#installation).
+Prebuilt binaries can also be downloaded from <a href="https://github.com/Hmbown/DeepSeek-TUI/releases">GitHub Releases</a>. Use `DEEPSEEK_TUI_RELEASE_BASE_URL` for mirrored release assets.
+
+### Windows (Scoop)
+
+<a href="https://scoop.sh">Scoop</a> is a Windows package manager. Once installed, run:
+
+```bash
+scoop install deepseek-tui
+```
+
+### Other API Providers
+
+```bash
+# NVIDIA NIM
+deepseek auth set --provider nvidia-nim --api-key "YOUR_NVIDIA_API_KEY"
+deepseek --provider nvidia-nim
+
+# Fireworks
+deepseek auth set --provider fireworks --api-key "YOUR_FIREWORKS_API_KEY"
+deepseek --provider fireworks --model deepseek-v4-pro
+
+# Self-hosted SGLang
+SGLANG_BASE_URL="http://localhost:30000/v1" deepseek --provider sglang --model deepseek-v4-flash
+
+# Self-hosted vLLM
+VLLM_BASE_URL="http://localhost:8000/v1" deepseek --provider vllm --model deepseek-v4-flash
+```
+
+---
+
+## What's New In v0.8.14
+
+A stabilization release focused on first-run setup, auto model + thinking routing, cost accounting, and provider support. <a>Full changelog</a>.
+
+- **Auto mode restored** — `--model auto`, `/model auto`, config `default_model = "auto"`, one-shot prompts, and sub-agents resolve to concrete model + thinking routes before calling the API
+- **Per-turn cost accounting fix** — V4 reasoning tokens are counted as billable output when providers report them separately from completion tokens
+- **First-run setup repair** — missing config files now lead users through API key setup and create `~/.deepseek/config.toml`
+- **Settings navigation fix** — arrow-key selection and click highlighting in the config UI work reliably on Windows terminals
+- **vLLM provider support** — self-hosted vLLM endpoints can be used with `--provider vllm` and `VLLM_BASE_URL`
 
 ---
 
 ## Usage
 
-### Interactive helper (recommended)
-
-The `script.sh` script checks your Python installation, installs any missing dependencies, and lets you choose which backend to run — all in one step.
-
 ```bash
-chmod +x script.sh
-./script.sh
-# You will be prompted:  "Enter choice [jax/torch]:"
+deepseek                                         # interactive TUI
+deepseek "explain this function"                 # one-shot prompt
+deepseek --model deepseek-v4-flash "summarize"   # model override
+deepseek --model auto "fix this bug"             # auto-select model + thinking
+deepseek --yolo                                  # auto-approve tools
+deepseek auth set --provider deepseek            # save API key
+deepseek doctor                                  # check setup & connectivity
+deepseek doctor --json                           # machine-readable diagnostics
+deepseek setup --status                          # read-only setup status
+deepseek setup --tools --plugins                 # scaffold tool/plugin dirs
+deepseek models                                  # list live API models
+deepseek sessions                                # list saved sessions
+deepseek resume --last                           # resume the most recent session in this workspace
+deepseek resume <SESSION_ID>                     # resume a specific session by UUID
+deepseek fork <SESSION_ID>                       # fork a session at a chosen turn
+deepseek serve --http                            # HTTP/SSE API server
+deepseek serve --acp                             # ACP stdio adapter for Zed/custom agents
+deepseek pr <N>                                  # fetch PR and pre-seed review prompt
+deepseek mcp list                                # list configured MCP servers
+deepseek mcp validate                            # validate MCP config/connectivity
+deepseek mcp-server                              # run dispatcher MCP stdio server
 ```
 
-### PyTorch (manual)
+### Zed / ACP
 
-```bash
-python src/torch_code.py
+DeepSeek can run as a custom Agent Client Protocol server for editors that
+spawn local ACP agents over stdio. In Zed, add a custom agent server:
+
+```json
+{
+  "agent_servers": {
+    "DeepSeek": {
+      "type": "custom",
+      "command": "deepseek",
+      "args": ["serve", "--acp"],
+      "env": {}
+    }
+  }
+}
 ```
 
-The script will:
-1. Load and split `complex_regression_data.csv` (80/10/10)
-2. Build and compile the MLP (`torch.compile` with the `inductor` backend)
-3. Train for up to 5 000 epochs with early stopping
-4. Save the best checkpoint to `best_model.pth`
+The first ACP slice supports new sessions and prompt responses through your
+existing DeepSeek config/API key. Tool-backed editing and checkpoint replay are
+not exposed through ACP yet.
 
-```
-Epoch 0:   Test Loss = 1.2345e-01  Val Loss = 1.2300e-01
-Epoch 100: Test Loss = 8.4321e-03  Val Loss = 8.1234e-03
-...
-Early stopping triggered
-```
+### Keyboard Shortcuts
 
-### JAX (manual)
-
-```bash
-python src/jax_code.py
-```
-
-The script will:
-1. Load and split `complex_regression_data.csv` (80/10/10)
-2. Initialise the MLP parameters with He initialisation
-3. Run JIT-compiled mini-batch updates (batch size 128) for up to 5 000 epochs
-4. Apply early stopping on validation MSE
-
-```
-Epoch 0:    Train Loss = 1.3456e-01, Val Loss = 1.3200e-01
-Epoch 100:  Train Loss = 9.1234e-03, Val Loss = 9.0012e-03
-...
-Early stopping triggered
-```
-
----
-
-## Testing
-
-Both implementations ship with isolated pytest suites that do **not** require the CSV dataset.
-
-```bash
-pytest
-```
-
-`pytest.ini` sets `testpaths = test`, so all tests under `test/` are discovered automatically.
-
-| File | Covers |
+| Key | Action |
 |---|---|
-| `test/torch_test.py` | MLP architecture, training step, data pipeline, MSE loss |
-| `test/jax_test.py` | `data_loader`, `init_mlp`, `mlp` forward pass, `loss_fn`, `update` step |
+| `Tab` | Complete `/` or `@` entries; while running, queue draft as follow-up; otherwise cycle mode |
+| `Shift+Tab` | Cycle reasoning-effort: off → high → max |
+| `F1` | Searchable help overlay |
+| `Esc` | Back / dismiss |
+| `Ctrl+K` | Command palette |
+| `Ctrl+R` | Resume an earlier session |
+| `Alt+R` | Search prompt history and recover cleared drafts |
+| `Ctrl+S` | Stash current draft (`/stash list`, `/stash pop` to recover) |
+| `@path` | Attach file/directory context in composer |
+| `↑` (at composer start) | Select attachment row for removal |
+
+Full shortcut catalog: <a>docs/KEYBINDINGS.md</a>.
 
 ---
 
-## Training Details
+## Modes
 
-| Hyperparameter | Value |
+| Mode | Behavior |
+| --- | --- |
+| **Plan** 🔍 | Read-only investigation — model explores and proposes a plan (`update_plan` + `checklist_write`) before making changes |
+| **Agent** 🤖 | Default interactive mode — multi-step tool use with approval gates; model outlines work via `checklist_write` |
+| **YOLO** ⚡ | Auto-approve all tools in a trusted workspace; still maintains plan and checklist for visibility |
+
+---
+
+## Configuration
+
+User config: `~/.deepseek/config.toml`. Project overlay: `<workspace>/.deepseek/config.toml` (denied: `api_key`, `base_url`, `provider`, `mcp_config_path`). <a>config.example.toml</a> has every option.
+
+Key environment variables:
+
+| Variable | Purpose |
 |---|---|
-| Architecture | `[3, 128, 128, 64, 1]` MLP |
-| Activation | ReLU |
-| Weight init | He (Kaiming) |
-| Optimizer | Adam |
-| Learning rate | `1e-5` |
-| Batch size | 64 (PyTorch) / 128 (JAX) |
-| Max epochs | 5 000 |
-| Early-stopping patience | 500 epochs |
-| Train / Val / Test split | 80 % / 10 % / 10 % |
-| Loss function | Mean Squared Error (MSE) |
+| `DEEPSEEK_API_KEY` | API key |
+| `DEEPSEEK_BASE_URL` | API base URL |
+| `DEEPSEEK_MODEL` | Default model |
+| `DEEPSEEK_PROVIDER` | `deepseek` (default), `nvidia-nim`, `fireworks`, `sglang`, `vllm` |
+| `DEEPSEEK_PROFILE` | Config profile name |
+| `DEEPSEEK_MEMORY` | Set to `on` to enable user memory |
+| `NVIDIA_API_KEY` / `FIREWORKS_API_KEY` / `SGLANG_API_KEY` / `VLLM_API_KEY` | Provider auth |
+| `SGLANG_BASE_URL` | Self-hosted SGLang endpoint |
+| `VLLM_BASE_URL` | Self-hosted vLLM endpoint |
+| `NO_ANIMATIONS=1` | Force accessibility mode at startup |
+| `SSL_CERT_FILE` | Custom CA bundle for corporate proxies |
+
+UI locale is separate from model language — set `locale` in `settings.toml`, use `/config locale zh-Hans`, or rely on `LC_ALL`/`LANG`. See <a>docs/CONFIGURATION.md</a> and <a>docs/MCP.md</a>.
 
 ---
 
-## Results
+## Models & Pricing
 
-Full training curves, loss plots, and analysis are available in the companion PDF reports:
+| Model | Context | Input (cache hit) | Input (cache miss) | Output |
+|---|---|---|---|---|
+| `deepseek-v4-pro` | 1M | $0.003625 / 1M* | $0.435 / 1M* | $0.87 / 1M* |
+| `deepseek-v4-flash` | 1M | $0.0028 / 1M | $0.14 / 1M | $0.28 / 1M |
 
-- [`reports/pytorch_report.pdf`](reports/pytorch_report.pdf) — PyTorch training results
-- [`reports/jax_report.pdf`](reports/jax_report.pdf) — JAX training results
+Legacy aliases `deepseek-chat` / `deepseek-reasoner` map to `deepseek-v4-flash`. NVIDIA NIM variants use your NVIDIA account terms.
 
-Both frameworks converge to comparable validation loss, confirming framework-agnostic reproducibility of the surrogate model.
+*DeepSeek Pro rates currently reflect a limited-time 75% discount, which remains valid until 15:59 UTC on 31 May 2026. After that time, the TUI cost estimator will revert to the base Pro rates.*
 
----
-
-## Framework Comparison
-
-| Feature | PyTorch | JAX |
-|---|---|---|
-| GPU acceleration | ✅ CUDA via `torch.device` | ✅ via `jaxlib` |
-| Compiler optimisation | ✅ `torch.compile` (Inductor) | ✅ `@jit` |
-| Functional API | Partial | ✅ Native |
-| Ecosystem maturity | ✅ Very mature | Growing |
-| Preferred for | Production / fine-tuning | Research / custom gradients |
+> [!Note]
+> For the latest DeepSeek-V4-Pro pricing, including the current 75% discount valid until 15:59 UTC on 31 May 2026, please consult the official <a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing">DeepSeek pricing page</a>. All rates listed in the README correspond to the officially published values.
 
 ---
 
-## Extending the Model
+## Publishing Your Own Skill
 
-- **More input features** — update the first `Linear` layer size in `torch_code.py` or the `layer_sizes` list in `jax_code.py`
-- **Deeper/wider network** — add layers to `nn.Sequential` (PyTorch) or the `layer_sizes` list (JAX)
-- **Different loss** — swap `nn.MSELoss()` / `jnp.mean((y_pred - y)**2)` for MAE, Huber, etc.
-- **Hyperparameter search** — wrap training loops with Optuna or Ray Tune
+DeepSeek TUI discovers skills from workspace directories (`.agents/skills` → `skills` → `.opencode/skills` → `.claude/skills` → `.cursor/skills`) and global directories (`~/.agents/skills` → `~/.deepseek/skills`). Each skill is a directory with a `SKILL.md` file:
+
+```text
+~/.agents/skills/my-skill/
+└── SKILL.md
+```
+
+Frontmatter required:
+
+```markdown
+---
+name: my-skill
+description: Use this when DeepSeek should follow my custom workflow.
+---
+
+# My Skill
+Instructions for the agent go here.
+```
+
+Commands: `/skills` (list), `/skill <name>` (activate), `/skill new` (scaffold), `/skill install github:<owner>/<repo>` (community), `/skill update` / `uninstall` / `trust`. Community installs from GitHub require no backend service. Installed skills appear in the model-visible session context; the agent can auto-select relevant skills via the `load_skill` tool when your task matches their descriptions.
+
+---
+
+## Documentation
+
+| Doc | Topic |
+|---|---|
+| <a>ARCHITECTURE.md</a> | Codebase internals |
+| <a>CONFIGURATION.md</a> | Full config reference |
+| <a>MODES.md</a> | Plan / Agent / YOLO modes |
+| <a>MCP.md</a> | Model Context Protocol integration |
+| <a>RUNTIME_API.md</a> | HTTP/SSE API server |
+| <a>INSTALL.md</a> | Platform-specific install guide |
+| <a>MEMORY.md</a> | User memory feature guide |
+| <a>SUBAGENTS.md</a> | Sub-agent role taxonomy and lifecycle |
+| <a>KEYBINDINGS.md</a> | Full shortcut catalog |
+| <a>RELEASE_RUNBOOK.md</a> | Release process |
+| <a>LOCALIZATION.md</a> | UI locale matrix & switching |
+| <a>OPERATIONS_RUNBOOK.md</a> | Ops & recovery |
+
+Full Changelog: <a>CHANGELOG.md</a>.
+
+---
+
+## Thanks
+
+This project ships with help from a growing community of contributors:
+
+- **<a href="https://github.com/merchloubna70-dot">merchloubna70-dot</a>** — 28 PRs spanning features, fixes, and VS Code extension scaffolding (#645–#681)
+- **<a href="https://github.com/WyxBUPT-22">WyxBUPT-22</a>** — Markdown rendering for tables, bold/italic, and horizontal rules (#579)
+- **<a href="https://github.com/loongmiaow-pixel">loongmiaow-pixel</a>** — Windows + China install documentation (#578)
+- **<a href="https://github.com/20bytes">20bytes</a>** — User memory docs and help polish (#569)
+- **<a href="https://github.com/staryxchen">staryxchen</a>** — glibc compatibility preflight (#556)
+- **<a href="https://github.com/Vishnu1837">Vishnu1837</a>** — glibc compatibility improvements (#565)
+- **<a href="https://github.com/shentoumengxin">shentoumengxin</a>** — Shell `cwd` boundary validation (#524)
+- **<a href="https://github.com/toi500">toi500</a>** — Windows paste fix report
+- **<a href="https://github.com/xsstomy">xsstomy</a>** — Terminal startup repaint report
+- **<a href="https://github.com/melody0709">melody0709</a>** — Slash-prefix Enter activation report
+- **<a href="https://github.com/lloydzhou">lloydzhou</a>** and **<a href="https://github.com/jeoor">jeoor</a>** — Compaction cost reports
+- **<a href="https://github.com/Agent-Skill-007">Agent-Skill-007</a>** — README clarity pass (#685)
+- **<a href="https://github.com/woyxiang">woyxiang</a>** — Windows Scoop install docs (#696)
+- **<a>wangfeng</a>** — Pricing/discount info update (#692)
+- **<a href="https://github.com/zichen0116">zichen0116</a>** — CODE_OF_CONDUCT.md (#686)
+- **<a href="https://github.com/dfwqdyl-ui">dfwqdyl-ui</a>** — model ID case-sensitivity compatibility report (#729)
+- **<a href="https://github.com/Oliver-ZPLiu">Oliver-ZPLiu</a>** — stale `working...` state bug report with detailed reproduction and fix (#738)
+- **Hafeez Pizofreude** — SSRF protection in `fetch_url` and Star History chart
+- **Unic (YuniqueUnic)** — Schema-driven config UI (TUI + web)
+- **Jason** — SSRF security hardening
 
 ---
 
 ## Contributing
 
-Pull requests are welcome. For significant changes, please open an issue first to discuss what you would like to change.
+See <a>CONTRIBUTING.md</a>. Pull requests welcome — check the <a href="https://github.com/Hmbown/DeepSeek-TUI/issues">open issues</a> for good first contributions.
 
----
+Support: <a href="https://www.buymeacoffee.com/hmbown">Buy me a coffee</a>.
+
+> [!Note]
+> *Not affiliated with DeepSeek Inc.*
 
 ## License
 
-[MIT](LICENSE)
+<a>MIT</a>
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=Hmbown%2FDeepSeek-TUI&type=date&logscale=&legend=top-left"><img src="https://api.star-history.com/chart?repos=Hmbown%2FDeepSeek-TUI&type=date&legend=top-left"></a>
