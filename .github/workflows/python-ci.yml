@@ -38,4 +38,5 @@ jobs:
 
       - name: Run Python script
         run: |
-          python src/main.py
+          python src/jax_code.py
+          python src/torch_code.py
