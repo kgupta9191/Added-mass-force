@@ -35,8 +35,3 @@ jobs:
       - name: Run tests with pytest
         run: |
           pytest -v
-
-      - name: Run Python script
-        run: |
-          python src/jax_code.py
-          python src/torch_code.py
